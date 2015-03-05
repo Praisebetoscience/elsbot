@@ -19,13 +19,11 @@ bot_subreddit = issue_subreddit
 snapshot_domains = np.reddit.com, np.redd.it
 
 # Database configuration
-#   This assumes sqlite3 datbase
+#   This assumes a heroku postgres database.
 #
-#   database_file: filename for the sqlite3 database
 #   record_TTL_days: number of days the bot will keep track of submissions
 #                    it's processed (used in maintenance)
 #   time_to_maintenance: seconds between database maintenance cycles
 [database]
-database_file = sql.db
 record_TTL_days = 60
 time_to_maintenance = 3600
