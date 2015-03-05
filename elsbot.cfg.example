@@ -1,0 +1,31 @@
+# ELSbot configuration file
+#
+#   This file does not contain passwords.  Username and password are set via environment variables, as this
+#   is written to run on heroku.
+
+# Reddit Configuration
+#   version: version of the code, incriment this every time the code updates
+#   operator: username of the person running the bot - i.e. you
+#   user_agent: User agent reported by praw
+#   subreddit: Subreddit the bot scans
+#   bot_subreddit: Subreddit where users can report issues regarding your bot
+#   snapshot_domains: list of domains the bot will snapshot
+[reddit]
+version = 1.0
+operator = your_user_name
+user_agent = elsbot v%(version)s operated by %(operator)s
+subreddit = your_subreddit
+bot_subreddit = issue_subreddit
+snapshot_domains = np.reddit.com, np.redd.it
+
+# Database configuration
+#   This assumes sqlite3 datbase
+#
+#   database_file: filename for the sqlite3 database
+#   record_TTL_days: number of days the bot will keep track of submissions
+#                    it's processed (used in maintenance)
+#   time_to_maintenance: seconds between database maintenance cycles
+[database]
+database_file = sql.db
+record_TTL_days = 60
+time_to_maintenance = 3600
