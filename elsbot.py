@@ -170,6 +170,9 @@ I am a bot.  For questions or issues, please post [here](/r/{subreddit}/submit?s
     def _post_archive_multicomment(self, post):
         link_list = ""
 
+        if post.selftext_html is None:
+            return False
+
         soup = BeautifulSoup(unescape(post.selftext_html))
         for anchor in soup.find_all('a'):
             netloc = urllib.parse.urlparse(anchor['href'])[1]
