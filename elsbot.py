@@ -129,6 +129,11 @@ I am a bot.  For questions or issues, please post [here](/r/{subreddit}/submit?s
         return False
 
     @staticmethod
+    def _fix_reddit_url(url):
+        if 'reddit.com' in url or 'redd.it' in url:
+            return re.sub('://[\w]+[.]red', '://red', url)
+
+    @staticmethod
     def _get_archive_url(url):
 
         data = urllib.parse.urlencode({'url': url})
@@ -144,7 +149,7 @@ I am a bot.  For questions or issues, please post [here](/r/{subreddit}/submit?s
         try:
             logging.debug("Fetching archive link for submission {0}: {1}"
                           .format(post.id, "http://redd.it/" + post.id))
-            archive_link = self._get_archive_url(post.url)
+            archive_link = self._get_archive_url(self._fix_reddit_url(post.url))
         except Exception as e:
             logging.error("Error fetching archive link on submission {0}: {1}"
                           .format(post.id, "http://redd.it/" + post.id))
@@ -172,7 +177,7 @@ I am a bot.  For questions or issues, please post [here](/r/{subreddit}/submit?s
                 try:
                     logging.debug("Fetching archive link for submission {0}: {1}"
                                   .format(post.id, "http://redd.it/" + post.id))
-                    archive_link = self._get_archive_url(anchor['href'])
+                    archive_link = self._get_archive_url(self._fix_reddit_url(anchor['href']))
                 except Exception as e:
                     logging.error("Error fetching archive link on submission {0}: {1}"
                                   .format(post.id, "http://redd.it/" + post.id))
