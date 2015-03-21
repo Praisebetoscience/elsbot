@@ -9,7 +9,7 @@
 #   user_agent: User agent reported by praw
 #   subreddit: Subreddit the bot scans
 #   bot_subreddit: Subreddit where users can report issues regarding your bot
-#   snapshot_domains: list of domains the bot will snapshot
+#   snapshot_domains: list of domains the bot will snapshot, use 'all' for everything
 [reddit]
 version = 1.1
 operator = your_user_name
@@ -27,3 +27,11 @@ snapshot_domains = np.reddit.com, np.redd.it, self.%(subreddit)s
 [database]
 record_TTL_days = 60
 time_to_maintenance = 3600
+
+# Random Quotes
+# Spice up your comments with this list of one-line quotes the bot will randomly select from.
+[quotes]
+quotes =
+    The greatest thing about Facebook, is that you can quote something and totally make up the source. — **George Washington**
+    The fabrication of Oscar Wilde quotes is among the noblest of endeavors. — **Oscar Wilde**
+    Rumors of my wit have been greatly exaggerated. — **Mark Twain**

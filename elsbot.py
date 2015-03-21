@@ -70,18 +70,14 @@ class ELSBot(object):
 
     config = {}
     post_comment = """
-[Snapshot of link]({link})
+{quote}
 
----
-
-I am a bot.  For questions or issues, please post [here](/r/{subreddit}/submit?selftext=true).
-    """
-    post_comment_multi = """
 Snapshots:
 
-{links}---
+* [This post]({this_post})
+{links}
 
-I am a bot.  For questions or issues, please post [here](/r/{subreddit}/submit?selftext=true).
+*I am a bot. ([Info](/r/{subreddit}) | [Contact](/r/{subreddit}/submit?selftext=true))*
     """
 
     def __init__(self, cfg, handler=praw.handlers.DefaultHandler()):
@@ -101,11 +97,15 @@ I am a bot.  For questions or issues, please post [here](/r/{subreddit}/submit?s
         self.config['password'] = os.environ['PASSWORD']
         self.config['subreddit'] = cfg_file['reddit']['subreddit']
         self.config['bot_subreddit'] = cfg_file['reddit']['bot_subreddit']
-        self.config['domains'] = [x.strip() for x in str(cfg_file['reddit']['snapshot_domains']).split(',')]
+        self.config['domains'] = [x.strip() for x in str(cfg_file['reddit']['snapshot_domains']).lower().split(',')]
 
         # read in database config
         self.config['record_TTL_days'] = int(cfg_file['database']['record_TTL_days'])
         self.config['db_TTM'] = int(cfg_file['database']['time_to_maintenance'])
+
+        # Load quote list
+        self.quote_list = cfg_file['quotes']['quotes'].split("\n")
+        self.quote_list = [quote for quote in self.quote_list if quote != '']
 
         # Initialize Reddit Connection
         self.r = praw.Reddit(self.config['user_agent'], handler=handler)
@@ -128,10 +128,14 @@ I am a bot.  For questions or issues, please post [here](/r/{subreddit}/submit?s
                 return True
         return False
 
+    def _get_quote(self):
+        return self.quote_list[randint(0, len(self.quote_list) - 1)]
+
     @staticmethod
     def _fix_reddit_url(url):
-        if 'reddit.com' in url or 'redd.it' in url:
-            return re.sub('://[\w]+[.]red', '://red', url)
+        if '.reddit.com' in url or '.redd.it' in url:
+            return re.sub('://[\w.]+[.]redd(?=(it[.]com|[.]it))', '://redd', url)
+        return url
 
     @staticmethod
     def _get_archive_url(url):
@@ -140,61 +144,52 @@ I am a bot.  For questions or issues, please post [here](/r/{subreddit}/submit?s
         data = data.encode('utf-8')
 
         # Get url from archive.today
-        res = urllib.request.urlopen("https://archive.today/submit/", data)
+        res = str(urllib.request.urlopen("https://archive.today/submit/", data).read(), 'utf-8')
         archive_url = re.findall("http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+",
-                                 str(res.read(), 'utf-8'))[0]
+                                 res)[0]
         return archive_url
 
-    def _post_archive_comment(self, post):
-        try:
-            logging.debug("Fetching archive link for submission {0}: {1}"
-                          .format(post.id, "http://redd.it/" + post.id))
-            archive_link = self._get_archive_url(self._fix_reddit_url(post.url))
-        except Exception as e:
-            logging.error("Error fetching archive link on submission {0}: {1}"
-                          .format(post.id, "http://redd.it/" + post.id))
-            logging.error(str(e))
-            return
-
-        logging.info("Adding link to archive.today on submission {0}: {1}"
-                     .format(post.id, "http://redd.it/" + post.id))
-        try:
-            post.add_comment(self.post_comment.format(link=archive_link,
-                                                      subreddit=self.config['bot_subreddit']))
-            self.post_archive.add(post.id)
-        except Exception as e:
-            logging.error("Error adding comment on submission {0}: {1}"
-                          .format(post.id, "http://redd.it/" + post.id))
-            logging.error(str(e))
-
-    def _post_archive_multicomment(self, post):
+    def _post_snapshots(self, post):
         link_list = ""
+        this_post = ""
 
-        if post.selftext_html is None:
-            return False
-
-        soup = BeautifulSoup(unescape(post.selftext_html))
-        for anchor in soup.find_all('a'):
-            netloc = urllib.parse.urlparse(anchor['href'])[1]
-            if netloc in self.config['domains']:
-                try:
-                    logging.debug("Fetching archive link for submission {0}: {1}"
-                                  .format(post.id, "http://redd.it/" + post.id))
-                    archive_link = self._get_archive_url(self._fix_reddit_url(anchor['href']))
-                except Exception as e:
-                    logging.error("Error fetching archive link on submission {0}: {1}"
-                                  .format(post.id, "http://redd.it/" + post.id))
-                    logging.error(str(e))
-                    return
-
-                link_list += "* [{0}...]({1})\n\n".format(anchor.contents[0][0:randint(35, 40)], archive_link)
-
-        if link_list == "":
-            return False
+        logging.debug("Fetching archive link for submission {0}: {1}".format(post.id, "http://redd.it/" + post.id))
 
         try:
-            post.add_comment(self.post_comment_multi.format(links=link_list,
-                                                            subreddit=self.config['bot_subreddit']))
+            if post.is_self and post.selftext_html is not None:
+                soup = BeautifulSoup(unescape(post.selftext_html))
+                for anchor in soup.find_all('a'):
+                    url = anchor['href']
+                    netloc = urllib.parse.urlparse(url)[1]
+                    if netloc == '':
+                        netloc = 'reddit.com'
+                        url = "http://www.reddit.com" + urllib.parse.urlparse(url)[2]
+                    if netloc in self.config['domains'] or 'all' in self.config['domains']:
+                        archive_link = self._get_archive_url(self._fix_reddit_url(url))
+                        link_list += "* [{0}...]({1})\n\n".format(anchor.contents[0][0:randint(35, 40)], archive_link)
+
+            elif not post.is_self:
+                archive_link = self._get_archive_url(self._fix_reddit_url(post.url))
+                link_list = "* [Link]({0})\n".format(archive_link)
+
+            this_post = self._get_archive_url("http://redd.it/" + post.id)
+
+        except KeyboardInterrupt as e:
+            logging.error("Error fetching archive link on submission {0}: {1}".format(post.id,
+                                                                                      "http://redd.it/" + post.id))
+            logging.error(str(e))
+            pass
+
+        quote = self._get_quote()
+
+        try:
+            if not post.archived:
+                logging.info("Posting snapshot on submission {0}: {1}".format(post.id,
+                                                                              "http://redd.it/" + post.id))
+                post.add_comment(self.post_comment.format(quote=quote,
+                                                          this_post=this_post,
+                                                          links=link_list,
+                                                          subreddit=self.config['bot_subreddit']))
             self.post_archive.add(post.id)
         except Exception as e:
             logging.error("Error adding comment on submission {0}: {1}"
@@ -205,7 +200,7 @@ I am a bot.  For questions or issues, please post [here](/r/{subreddit}/submit?s
         logging.info("Scanning new posts in /r/{}...".format(self.config['subreddit']))
         posts = self.sr.get_new()
         for post in posts:
-            if post.domain in self.config['domains']:
+            if post.domain.lower() in self.config['domains'] or 'all' in self.config['domains']:
                 try:
                     if self.post_archive.is_archived(post.id):
                         logging.debug("Skipping previously processed post {0}: {1}"
@@ -228,10 +223,7 @@ I am a bot.  For questions or issues, please post [here](/r/{subreddit}/submit?s
                     logging.error(str(e))
                     continue
 
-                if post.is_self:
-                    self._post_archive_multicomment(post)
-                else:
-                    self._post_archive_comment(post)
+                self._post_snapshots(post)
 
             else:
                 logging.debug("Domain not in snapshot domain list: {}".format(post.domain))
