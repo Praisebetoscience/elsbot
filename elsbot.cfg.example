@@ -10,13 +10,15 @@
 #   subreddit: Subreddit the bot scans
 #   bot_subreddit: Subreddit where users can report issues regarding your bot
 #   snapshot_domains: list of domains the bot will snapshot, use 'all' for everything
+#   quote_wiki_page: wiki page with quotes to include with the snapshot links
 [reddit]
-version = 1.1
+version = 1.3
 operator = your_user_name
 user_agent = elsbot v%(version)s operated by %(operator)s
 subreddit = your_subreddit
 bot_subreddit = issue_subreddit
 snapshot_domains = np.reddit.com, np.redd.it, self.%(subreddit)s
+quote_wiki_page = elsbot_quotes
 
 # Database configuration
 #   This assumes a heroku postgres database.
@@ -28,10 +30,3 @@ snapshot_domains = np.reddit.com, np.redd.it, self.%(subreddit)s
 record_TTL_days = 60
 time_to_maintenance = 3600
 
-# Random Quotes
-# Spice up your comments with this list of one-line quotes the bot will randomly select from.
-[quotes]
-quotes =
-    The greatest thing about Facebook, is that you can quote something and totally make up the source. — **George Washington**
-    The fabrication of Oscar Wilde quotes is among the noblest of endeavors. — **Oscar Wilde**
-    Rumors of my wit have been greatly exaggerated. — **Mark Twain**

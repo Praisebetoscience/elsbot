@@ -98,19 +98,21 @@ Snapshots:
         self.config['subreddit'] = cfg_file['reddit']['subreddit']
         self.config['bot_subreddit'] = cfg_file['reddit']['bot_subreddit']
         self.config['domains'] = [x.strip() for x in str(cfg_file['reddit']['snapshot_domains']).lower().split(',')]
+        self.config['quote_wiki_page'] = cfg_file['reddit']['quote_wiki_page']
 
         # read in database config
         self.config['record_TTL_days'] = int(cfg_file['database']['record_TTL_days'])
         self.config['db_TTM'] = int(cfg_file['database']['time_to_maintenance'])
 
-        # Load quote list
-        self.quote_list = cfg_file['quotes']['quotes'].split("\n")
-        self.quote_list = [quote for quote in self.quote_list if quote != '']
-
         # Initialize Reddit Connection
         self.r = praw.Reddit(self.config['user_agent'], handler=handler)
         self.r.login(self.config['username'], self.config['password'])
         self.sr = self.r.get_subreddit(self.config['subreddit'])
+
+        # Load quotes from wiki
+        self.quote_list = []
+        self.quote_last_revised = 0
+        self.load_quote_list()
 
         # Initialize post database which prevents double posts
         self.post_archive = PostArchive(self.config['record_TTL_days'],
@@ -118,6 +120,22 @@ Snapshots:
 
         # Do an initial maintenance on db when starting
         self.post_archive.db_maintenence()
+
+    @staticmethod
+    def _get_quotes(wiki_page):
+        # Remove remaining escape characters from wiki content
+        quotes = unescape(wiki_page.content_md)
+
+        # Remove comment lines starting with # or ; including any leading whitespace
+        quotes = re.sub('^[ \t]*[#;].*$', '', quotes, flags=re.MULTILINE)
+
+        # Split and strip the quotes into an array using --- as a delimiter
+        quotes = [quote.strip() for quote in quotes.split('---')]
+
+        # Remove any blank quotes
+        quotes = [quote for quote in quotes if quote]
+
+        return quotes
 
     def _check_for_comment(self, post):
         comments_flat = praw.helpers.flatten_tree(post.comments)
@@ -129,7 +147,9 @@ Snapshots:
         return False
 
     def _get_quote(self):
-        return self.quote_list[randint(0, len(self.quote_list) - 1)]
+        if self.quote_list:
+            return self.quote_list[randint(0, len(self.quote_list) - 1)]
+        return ''
 
     @staticmethod
     def _fix_reddit_url(url):
@@ -196,6 +216,23 @@ Snapshots:
                           .format(post.id, "http://redd.it/" + post.id))
             logging.error(str(e))
 
+    def load_quote_list(self):
+        logging.debug("Checking quote wiki pate for updates...")
+
+        try:
+            wiki = self.r.get_wiki_page(self.config['subreddit'], self.config['quote_wiki_page'])
+        except Exception as e:
+            logging.error("Error loading quote wikipage.")
+            logging.error(str(e))
+            return False
+
+        if self.quote_last_revised >= wiki.revision_date:
+            return False
+
+        logging.info('Quote wiki page updated, loading quotes...')
+        self.quote_list = self._get_quotes(wiki)
+        self.quote_last_revised = wiki.revision_date
+
     def scan_posts(self):
         logging.info("Scanning new posts in /r/{}...".format(self.config['subreddit']))
         posts = self.sr.get_new()
@@ -247,6 +284,7 @@ def main():
         try:
             elsbot.scan_posts()
             elsbot.run_db_maintenance()
+            elsbot.load_quote_list()
             time.sleep(10)
         except KeyboardInterrupt:
             elsbot.close()
