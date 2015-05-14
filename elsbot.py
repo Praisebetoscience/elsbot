@@ -163,8 +163,8 @@ Snapshots:
         data = urllib.parse.urlencode({'url': url})
         data = data.encode('utf-8')
 
-        # Get url from archive.today
-        res = str(urllib.request.urlopen("https://archive.today/submit/", data).read(), 'utf-8')
+        # Get url from archive.is
+        res = str(urllib.request.urlopen("https://archive.is/submit/", data).read(), 'utf-8')
         archive_url = re.findall("http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+",
                                  res)[0]
         return archive_url
@@ -199,6 +199,12 @@ Snapshots:
                                                                                       "http://redd.it/" + post.id))
             logging.error(str(e))
             pass
+
+        if "/loading.gif)" in this_post + link_list:
+            logging.error("Error fetching archive link on submission {0}: {1}".format(post.id,
+                                                                                      "http://redd.it/" + post.id))
+            logging.error("Bad archive url.")
+            return False
 
         quote = self._get_quote()
 
