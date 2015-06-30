@@ -31,10 +31,10 @@ class PostArchive(object):
         self.config['db_TTM'] = db_ttm
 
         urllib.parse.uses_netloc.append("postgres")
-        url = urllib.parse.urlparse(os.environ["DATABASE_URL"])
+        url = urllib.parse.urlparse(os.environ["OPENSHIFT_POSTGRESQL_DB_URL"])
 
         self.sql = postgres.connect(
-            database=url.path[1:],
+            database=os.environ['OPENSHIFT_APP_NAME'],
             user=url.username,
             password=url.password,
             host=url.hostname,
@@ -70,7 +70,7 @@ class PostArchive(object):
 class ELSBot(object):
 
     config = {}
-    version = 2.0
+    version = 'v2.0'
     post_comment = """
 {quote}
 
@@ -94,7 +94,7 @@ Snapshots:
 
         # read in config
         self.config['client_id'] = cfg_file['reddit']['client_id']
-        self.config['client_secret'] = cfg_file['reddit']['client_secrret']
+        self.config['client_secret'] = cfg_file['reddit']['client_secret']
         self.config['redirect_uri'] = cfg_file['reddit']['redirect_uri']
         self.config['refresh_token'] = cfg_file['reddit']['refresh_token']
         self.config['subreddit'] = cfg_file['reddit']['subreddit']
@@ -116,8 +116,13 @@ Snapshots:
         # Initialize Reddit Connection
         self.r = praw.Reddit(self.config['user_agent'], handler=handler)
         self.r.config.api_request_delay = 1.0  # OAuth rate limit
-        self.r.login(self.config['username'], self.config['password'])
+        self.r.set_oauth_app_info(client_id=self.config['client_id'],
+                             client_secret=self.config['client_secret'],
+                             redirect_uri=self.config['redirect_uri'])
+
+        self.r.refresh_access_information(self.config['refresh_token'], update_session=True)
         self.sr = self.r.get_subreddit(self.config['subreddit'])
+        self.config['username'] = self.r.get_me().name
 
         # Load quotes from wiki
         self.quote_list = []
@@ -301,15 +306,20 @@ def main():
     parser.add_argument('--config-file', '-f', default='elsbot.cfg', help="specify a configuration file.")
     args = parser.parse_args()
 
+    if not os.path.isfile(args.config_file):
+        logging.error("Config file {} does not exist.".format(args.config_file))
+        exit()
+
     elsbot = ELSBot(args.config_file)
 
     while True:
         try:
             elsbot.scan_posts()
-            elsbot.run_db_maintenance()
-            elsbot.load_quote_list()
             if args.run_once:
                 break
+
+            elsbot.run_db_maintenance()
+            elsbot.load_quote_list()
             time.sleep(10)
         except KeyboardInterrupt:
             elsbot.close()
