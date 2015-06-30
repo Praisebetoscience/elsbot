@@ -3,3 +3,6 @@ env/
 *.pyc
 .idea/
 *.db
+
+#config file
+*.cfg

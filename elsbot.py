@@ -1,3 +1,5 @@
+__author__ = '/u/PraiseBeToScience'
+
 import sys
 import os
 import time
@@ -10,11 +12,10 @@ import praw
 import praw.helpers
 import praw.handlers
 import psycopg2 as postgres
+import platform
 from bs4 import BeautifulSoup
 from html.parser import unescape
 from random import randint
-
-CFG_FILE = 'elsbot.cfg'
 
 
 class PostArchive(object):
@@ -69,6 +70,7 @@ class PostArchive(object):
 class ELSBot(object):
 
     config = {}
+    version = 2.0
     post_comment = """
 {quote}
 
@@ -91,10 +93,10 @@ Snapshots:
         cfg_file.read(path_to_cfg)
 
         # read in config
-        self.config['user_agent'] = cfg_file['reddit']['user_agent']
-        self.config['operator'] = cfg_file['reddit']['operator']
-        self.config['username'] = os.environ['USER_NAME']
-        self.config['password'] = os.environ['PASSWORD']
+        self.config['client_id'] = cfg_file['reddit']['client_id']
+        self.config['client_secret'] = cfg_file['reddit']['client_secrret']
+        self.config['redirect_uri'] = cfg_file['reddit']['redirect_uri']
+        self.config['refresh_token'] = cfg_file['reddit']['refresh_token']
         self.config['subreddit'] = cfg_file['reddit']['subreddit']
         self.config['bot_subreddit'] = cfg_file['reddit']['bot_subreddit']
         self.config['domains'] = [x.strip() for x in str(cfg_file['reddit']['snapshot_domains']).lower().split(',')]
@@ -104,8 +106,16 @@ Snapshots:
         self.config['record_TTL_days'] = int(cfg_file['database']['record_TTL_days'])
         self.config['db_TTM'] = int(cfg_file['database']['time_to_maintenance'])
 
+        # Set useragent
+        self.config['user_agent'] = "{platform}:{botname}:{version} by {author}"\
+            .format(platform=platform.system(),
+                    botname=os.path.basename(__file__).strip('.py'),
+                    version=self.version,
+                    author=__author__)
+
         # Initialize Reddit Connection
         self.r = praw.Reddit(self.config['user_agent'], handler=handler)
+        self.r.config.api_request_delay = 1.0  # OAuth rate limit
         self.r.login(self.config['username'], self.config['password'])
         self.sr = self.r.get_subreddit(self.config['subreddit'])
 
@@ -280,17 +290,26 @@ Snapshots:
 
 
 def main():
+    import argparse
+
     logging.basicConfig(format='%(asctime)s (%(levelname)s): %(message)s',
                         datefmt='%m-%d-%Y %I:%M:%S %p', level=logging.INFO)
     logging.info("ELSbot starting...")
 
-    elsbot = ELSBot(CFG_FILE)
+    parser = argparse.ArgumentParser(description="Snap Shot Bot with Quotes.")
+    parser.add_argument('--run-once', '-r', action='store_true', help='run scan once then quit')
+    parser.add_argument('--config-file', '-f', default='elsbot.cfg', help="specify a configuration file.")
+    args = parser.parse_args()
+
+    elsbot = ELSBot(args.config_file)
 
     while True:
         try:
             elsbot.scan_posts()
             elsbot.run_db_maintenance()
             elsbot.load_quote_list()
+            if args.run_once:
+                break
             time.sleep(10)
         except KeyboardInterrupt:
             elsbot.close()
@@ -298,6 +317,8 @@ def main():
         except Exception as e:
             logging.error("Error running bot.")
             logging.error(str(e))
+            if args.run_once:
+                exit()
             time.sleep(10)
 
 
