@@ -17,7 +17,7 @@ from bs4 import BeautifulSoup
 from html.parser import HTMLParser
 from random import randint
 
-exit()
+
 class PostArchive(object):
 
     config = {}
