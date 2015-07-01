@@ -14,10 +14,10 @@ import praw.handlers
 import psycopg2 as postgres
 import platform
 from bs4 import BeautifulSoup
-from html.parser import unescape
+from html.parser import HTMLParser
 from random import randint
 
-
+exit()
 class PostArchive(object):
 
     config = {}
@@ -117,8 +117,8 @@ Snapshots:
         self.r = praw.Reddit(self.config['user_agent'], handler=handler)
         self.r.config.api_request_delay = 1.0  # OAuth rate limit
         self.r.set_oauth_app_info(client_id=self.config['client_id'],
-                             client_secret=self.config['client_secret'],
-                             redirect_uri=self.config['redirect_uri'])
+                                  client_secret=self.config['client_secret'],
+                                  redirect_uri=self.config['redirect_uri'])
 
         self.r.refresh_access_information(self.config['refresh_token'], update_session=True)
         self.sr = self.r.get_subreddit(self.config['subreddit'])
@@ -139,7 +139,7 @@ Snapshots:
     @staticmethod
     def _get_quotes(wiki_page):
         # Remove remaining escape characters from wiki content
-        quotes = unescape(wiki_page.content_md)
+        quotes = HTMLParser().unescape(wiki_page.content_md)
 
         # Remove comment lines starting with # or ; including any leading whitespace
         quotes = re.sub('^[ \t]*[#;].*$', '', quotes, flags=re.MULTILINE)
@@ -192,7 +192,7 @@ Snapshots:
 
         try:
             if post.is_self and post.selftext_html is not None:
-                soup = BeautifulSoup(unescape(post.selftext_html))
+                soup = BeautifulSoup(HTMLParser().unescape(post.selftext_html))
                 for anchor in soup.find_all('a'):
                     url = anchor['href']
                     netloc = urllib.parse.urlparse(url)[1]
