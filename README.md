@@ -1,22 +1,38 @@
 # Introduction
 
-ELSbot was written to add archive.today links to submissions made from [/r/EnoughLibertarianSpam](https://reddit.com/r/EnoughLibertarianSpam) to other subreddits.  It's based on many of the other snapshot bots that frequest reddit's meta subs.
+ELSbot was written to add archive.is links to submissions made from [/r/EnoughLibertarianSpam](https://reddit.com/r/EnoughLibertarianSpam) to other subreddits.  It's based on many of the other snapshot bots that frequest reddit's meta subs.
 
 ## Disclaimer
 
-This code has been made public largely for the moderation team at /r/EnoughLibtertarianSpam.  You certainly can add issues, or ask questions here or at [/r/elsbot](https://reddit.com/r/elsbot) but the author may or may not inclined to add features or debug your instance.  The author certainly will respond to any issues with may be causing problems on reddit or breaking reddit's API policies.
+This code has been made public largely for the moderation team at /r/EnoughLibertarianSpam.  You certainly can add issues, or ask questions here or at [/r/elsbot](https://reddit.com/r/elsbot) but the author may or may not inclined to add features or debug your instance.  The author certainly will respond to any issues with may be causing problems on reddit or breaking reddit's API policies.
 
-# Heroku
+# Python Verson
 
-This bot is setup to run on Heroku using a Heroku postgressql developers (free) database.
+Originally written for Python 3.4, to run on OpenShift it needed to be downgraded to python 3.3.2 
 
-## Login information
+# Open Shift
 
-USER_NAME and PASSWORD are set as environment variables.  You can set the up via web interface or command line via this [devnote](https://devcenter.heroku.com/articles/config-vars).
+This bot now runs on Open shift using the cron-1.4 and postgresql-9.2 cartridges. 
+
+## Oauth
+
+Login is now handled by Oauth.  [You can use this tutorial to get setup OAuth](http://praw.readthedocs.org/en/latest/pages/oauth.html), however it doesn't cover getting the refresh token which is the most important part for scripts.  To get the refresh token run `print(access_information['refresh_token']` after step 4.
 
 ## Database
 
-Database information is also set via Heroku environment variable.  [See instructions on how to connect to the database.](https://devcenter.heroku.com/articles/heroku-postgresql#connecting-in-python)
-To keep the database under the 10k row limit, it periodically removes old records.  The default retention time is 60 days, however if a sub somehow overruns this, reduce record_TTL_days as needed.
+Database information is also set via Openshift environment variables: OPENSHIFT_POSTGRESQL_DB_URL and OPENSHIFT_APP_NAME.  To access the database locally you'll need to get ssh into your openshift account and run `echo ${OPENSHIFT_POSTGRESQL_DB_URL} ${OPENSHIFT_APP_NAME}` at the CLI.  You need to setup port forwarding with rhc: `rhc port-forward -a <YourAppname>`
+The OpenShift database has no row limits unlike Heroku (previously used).  However, the database maintenance remains in place to for cleanliness. 
 
-This bot was originally written for sqlite3, however there are [significant issues with using sqlite3 on Heroku](https://devcenter.heroku.com/articles/sqlite3) because of the filesystem it uses.
+This bot was originally written for sqlite3, however there were [significant issues with using sqlite3 on Heroku](https://devcenter.heroku.com/articles/sqlite3) because of the filesystem it uses.  Now that the bot has moved over to OpenShift, the bot still uses PostgreSQL even though sqlite3 can be stored on OpenShift in OPENSHIFT_DATA_DIR simply beacuse it was eaier to migrate then change the PostArchive class again. 
+
+# CLI
+
+As of 2.0 the bot now supports some command line options for different deployments.
+
+## --run-once -r
+
+This runs a scan only once. This is useful for deploying the bot as a cron job (great on OpenShift).  The script defaults to continuous scanning. 
+
+## --config-file -f
+
+Allows you to specify a different config file to run the bot.  Defaults to `elsbot.cfg`.
