@@ -14,9 +14,9 @@ Originally written for Python 3.4, to run on OpenShift it needed to be downgrade
 
 This bot now runs on Open shift using the cron-1.4 and postgresql-9.2 cartridges. 
 
-## Oauth
+## OAuth
 
-Login is now handled by Oauth.  [You can use this tutorial to get setup OAuth](http://praw.readthedocs.org/en/latest/pages/oauth.html), however it doesn't cover getting the refresh token which is the most important part for scripts.  To get the refresh token run `print(access_information['refresh_token']` after step 4.
+Login is now handled by OAuth.  [You can use this tutorial to get setup OAuth](http://praw.readthedocs.org/en/latest/pages/oauth.html), however it doesn't cover getting the refresh token which is the most important part for scripts.  To get the refresh token run `print(access_information['refresh_token'])` after step 4.
 
 ## Database
 
