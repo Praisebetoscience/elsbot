@@ -6,16 +6,19 @@ import time
 import logging
 import re
 import configparser
-import urllib.request
-import urllib.parse
 import praw
 import praw.helpers
 import praw.handlers
-import psycopg2 as postgres
+import sqlite3 as lite
 import platform
 from bs4 import BeautifulSoup
 from html.parser import HTMLParser
-from random import randint
+import random
+from archives import ArchiveContainer
+
+VERSION = 'v3.0'
+DATABASE_FILE = os.environ['OPENSHIFT_DATA_DIR'] + 'sql.db'
+REDDIT_PATTERN = re.compile(r'https?://(([a-z]{2})(-[a-z]{2})?|beta|i|m|pay|ssl|www)\.?reddit\.com', flags=re.I)
 
 
 class PostArchive(object):
@@ -30,37 +33,28 @@ class PostArchive(object):
         self.config['record_TTL_days'] = record_ttl_days
         self.config['db_TTM'] = db_ttm
 
-        urllib.parse.uses_netloc.append("postgres")
-        url = urllib.parse.urlparse(os.environ["OPENSHIFT_POSTGRESQL_DB_URL"])
-
-        self.sql = postgres.connect(
-            database=os.environ['OPENSHIFT_APP_NAME'],
-            user=url.username,
-            password=url.password,
-            host=url.hostname,
-            port=url.port
-        )
+        self.sql = lite.connect(DATABASE_FILE)
         self.cur = self.sql.cursor()
 
-        self.cur.execute("CREATE TABLE IF NOT EXISTS oldposts(Id VARCHAR, Timestamp FLOAT)")
+        self.cur.execute("CREATE TABLE IF NOT EXISTS oldposts(Id TXT, Timestamp FLOAT)")
         self.sql.commit()
 
     def db_maintenence(self):
         if time.time() - self.config['db_TTM'] > self.last_maintenance:
             logging.info('Running database maintenance.')
             expire_date = time.time() - self.config['record_TTL_days'] * 24 * 3600
-            self.cur.execute("DELETE FROM oldposts WHERE Timestamp <= %s", [expire_date])
+            self.cur.execute("DELETE FROM oldposts WHERE Timestamp <= ?", (expire_date, ))
             self.sql.commit()
             self.last_maintenance = time.time()
 
     def is_archived(self, post_id):
-        self.cur.execute("SELECT * FROM oldposts WHERE Id=%s", [post_id])
+        self.cur.execute("SELECT * FROM oldposts WHERE Id=?", (post_id, ))
         if self.cur.fetchone():
             return True
         return False
 
     def add(self, post_id):
-        self.cur.execute("INSERT INTO oldposts VALUES(%s,%s)", [post_id, time.time()])
+        self.cur.execute("INSERT INTO oldposts VALUES(?,?)", [post_id, time.time()])
         self.sql.commit()
 
     def close(self):
@@ -70,17 +64,6 @@ class PostArchive(object):
 class ELSBot(object):
 
     config = {}
-    version = 'v2.0'
-    post_comment = """
-{quote}
-
-Snapshots:
-
-* [This post]({this_post})
-{links}
-
-*I am a bot. ([Info](/r/{subreddit}) | [Contact](/r/{subreddit}/submit?selftext=true))*
-    """
 
     def __init__(self, cfg, handler=praw.handlers.DefaultHandler()):
 
@@ -99,7 +82,6 @@ Snapshots:
         self.config['refresh_token'] = cfg_file['reddit']['refresh_token']
         self.config['subreddit'] = cfg_file['reddit']['subreddit']
         self.config['bot_subreddit'] = cfg_file['reddit']['bot_subreddit']
-        self.config['domains'] = [x.strip() for x in str(cfg_file['reddit']['snapshot_domains']).lower().split(',')]
         self.config['quote_wiki_page'] = cfg_file['reddit']['quote_wiki_page']
 
         # read in database config
@@ -110,7 +92,7 @@ Snapshots:
         self.config['user_agent'] = "{platform}:{botname}:{version} by {author}"\
             .format(platform=platform.system(),
                     botname=os.path.basename(__file__).strip('.py'),
-                    version=self.version,
+                    version=VERSION,
                     author=__author__)
 
         # Initialize Reddit Connection
@@ -157,84 +139,68 @@ Snapshots:
         for comment in comments_flat:
             if not hasattr(comment, 'author') or not hasattr(comment.author, 'name'):
                 continue
-            if comment.author.name == self.config['username']:
+            if comment.author.name in [self.config['username'], 'SnapshillBot']:
                 return True
         return False
 
     def _get_quote(self):
         if self.quote_list:
-            return self.quote_list[randint(0, len(self.quote_list) - 1)]
+            return random.choice(self.quote_list)
         return ''
 
     @staticmethod
-    def _fix_reddit_url(url):
-        if '.reddit.com' in url or '.redd.it' in url:
-            return re.sub('://[\w.]+[.]redd(?=(it[.]com|[.]it))', '://redd', url)
-        return url
+    def _fix_url(url):
+        if url.startswith(('/r/', '/u/')):
+            url = "http://www.reddit.com" + url
+        if url.startswith(('r/', 'u/')):
+            url = "http://www.reddit.com/" + url
+        return re.sub(REDDIT_PATTERN, 'http://www.reddit.com', url)
 
     @staticmethod
-    def _get_archive_url(url):
+    def _build(archives, quote, subreddit):
 
-        data = urllib.parse.urlencode({'url': url})
-        data = data.encode('utf-8')
+        # Header
+        comment = quote + "\n\nSnapshots:\n\n"
 
-        # Get url from archive.is
-        res = str(urllib.request.urlopen("https://archive.is/submit/", data).read(), 'utf-8')
-        archive_url = re.findall("http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+",
-                                 res)[0]
-        return archive_url
+        # List of snapshots
+        for ac in archives:
+            comment += "* {} - ".format(ac.text)
+            i = 1
+            for a in ac:
+                if a.archived:
+                    comment += "[{}]({}), ".format(i, a.archived)
+                elif a.archived is None:
+                    continue
+                else:
+                    comment += "[{}]({}), ".format('Error', a.error_link)
+                i += 1
+            comment = comment.strip(', ') + '\n'
+
+        # Footer
+        comment += "\n\n*I am a bot. ([Info](/r/{0}) | [Contact](/r/{0}/submit?selftext=true))*".format(subreddit)
+
+        return comment
 
     def _post_snapshots(self, post):
-        link_list = ""
-        this_post = ""
+        logging.debug("Fetching Archives for: {}".format(post.permalink))
 
-        logging.debug("Fetching archive link for submission {0}: {1}".format(post.id, "http://redd.it/" + post.id))
+        archives = [ArchiveContainer(self._fix_url(post.url), "*This Post*")]
 
-        try:
-            if post.is_self and post.selftext_html is not None:
-                soup = BeautifulSoup(HTMLParser().unescape(post.selftext_html))
-                for anchor in soup.find_all('a'):
-                    url = anchor['href']
-                    netloc = urllib.parse.urlparse(url)[1]
-                    if netloc == '':
-                        netloc = 'reddit.com'
-                        url = "http://www.reddit.com" + urllib.parse.urlparse(url)[2]
-                    if netloc in self.config['domains'] or 'all' in self.config['domains']:
-                        archive_link = self._get_archive_url(self._fix_reddit_url(url))
-                        link_list += "* [{0}...]({1})\n\n".format(anchor.contents[0][0:randint(35, 40)], archive_link)
-
-            elif not post.is_self:
-                archive_link = self._get_archive_url(self._fix_reddit_url(post.url))
-                link_list = "* [Link]({0})\n".format(archive_link)
-
-            this_post = self._get_archive_url("http://redd.it/" + post.id)
-
-        except KeyboardInterrupt as e:
-            logging.error("Error fetching archive link on submission {0}: {1}".format(post.id,
-                                                                                      "http://redd.it/" + post.id))
-            logging.error(str(e))
-            pass
-
-        if "/loading.gif)" in this_post + link_list:
-            logging.error("Error fetching archive link on submission {0}: {1}".format(post.id,
-                                                                                      "http://redd.it/" + post.id))
-            logging.error("Bad archive url.")
-            return False
+        if post.is_self and post.selftext_html is not None:
+            links = BeautifulSoup(HTMLParser().unescape(post.selftext_html), "html.parser").find_all('a')
+            for link in links:
+                url = self._fix_url(link['href'])
+                archives.append(ArchiveContainer(url, link.contents[0]))
 
         quote = self._get_quote()
 
         try:
             if not post.archived:
-                logging.info("Posting snapshot on submission {0}: {1}".format(post.id,
-                                                                              "http://redd.it/" + post.id))
-                post.add_comment(self.post_comment.format(quote=quote,
-                                                          this_post=this_post,
-                                                          links=link_list,
-                                                          subreddit=self.config['bot_subreddit']))
-            self.post_archive.add(post.id)
+                logging.info("Posting snapshot: {}".format(post.permalink))
+                post.add_comment(self._build(archives, quote, self.config['bot_subreddit']))
+                self.post_archive.add(post.id)
         except Exception as e:
-            logging.error("Error adding comment on submission {0}: {1}"
-                          .format(post.id, "http://redd.it/" + post.id))
+            logging.error("Error posting snapshot: {}".format(post.permalink))
             logging.error(str(e))
 
     def load_quote_list(self):
@@ -255,38 +221,28 @@ Snapshots:
         self.quote_last_revised = wiki.revision_date
 
     def scan_posts(self):
+
         logging.info("Scanning new posts in /r/{}...".format(self.config['subreddit']))
+
         posts = self.sr.get_new()
         for post in posts:
-            if post.domain.lower() in self.config['domains'] or 'all' in self.config['domains']:
-                try:
-                    if self.post_archive.is_archived(post.id):
-                        logging.debug("Skipping previously processed post {0}: {1}"
-                                      .format(post.id, "http://redd.it/" + post.id))
-                        continue
-                except Exception as e:
-                    logging.error("Error connecting to post archive database.")
-                    logging.error(str(e))
+            if self.post_archive.is_archived(post.id):
+                logging.debug("Skipping, archived: {}".format(post.permalink))
+                continue
+
+            try:
+                if self._check_for_comment(post):
+                    logging.debug("Skipping, previously commented: {}".format(post.permalink))
+                    self.post_archive.add(post.id)
                     continue
+            except Exception as e:
+                logging.error("Error loading comments: {}".format(post.permalink))
+                logging.error(str(e))
+                continue
 
-                try:
-                    if self._check_for_comment(post):
-                        logging.debug("Already commented in submission, skipping {0}: {1}"
-                                      .format(post.id, "http://redd.it/" + post.id))
-                        self.post_archive.add(post.id)
-                        continue
-                except Exception as e:
-                    logging.error("Error loading comments on submission {0}: {1}"
-                                  .format(post.id, "http://redd.it/" + post.id))
-                    logging.error(str(e))
-                    continue
+            self._post_snapshots(post)
 
-                self._post_snapshots(post)
-
-            else:
-                logging.debug("Domain not in snapshot domain list: {}".format(post.domain))
-
-    def run_db_maintenance(self):
+    def db_maintenance(self):
         self.post_archive.db_maintenence()
 
     def close(self):
@@ -296,13 +252,17 @@ Snapshots:
 
 def main():
     import argparse
+    import warnings
+
+    warnings.simplefilter('ignore', ResourceWarning)
+    warnings.simplefilter('ignore', UserWarning)
 
     logging.basicConfig(format='%(asctime)s (%(levelname)s): %(message)s',
                         datefmt='%m-%d-%Y %I:%M:%S %p', level=logging.INFO)
     logging.info("ELSbot starting...")
 
     parser = argparse.ArgumentParser(description="Snap Shot Bot with Quotes.")
-    parser.add_argument('--run-once', '-r', action='store_true', help='run scan once then quit')
+    parser.add_argument('--run-once', '-r', action='store_false', help='run scan once then quit')
     parser.add_argument('--config-file', '-f', default='elsbot.cfg', help="specify a configuration file.")
     args = parser.parse_args()
 
@@ -318,7 +278,7 @@ def main():
             if args.run_once:
                 break
 
-            elsbot.run_db_maintenance()
+            elsbot.db_maintenance()
             elsbot.load_quote_list()
             time.sleep(10)
         except KeyboardInterrupt:

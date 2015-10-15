@@ -9,7 +9,6 @@
 #   user_agent: User agent reported by praw
 #   subreddit: Subreddit the bot scans
 #   bot_subreddit: Subreddit where users can report issues regarding your bot
-#   snapshot_domains: list of domains the bot will snapshot, use 'all' for everything
 #   quote_wiki_page: wiki page with quotes to include with the snapshot links
 [reddit]
 client_id = OAuth_id
@@ -18,11 +17,10 @@ redirect_uri = OAuth_uri
 refresh_token = OAuth_token
 subreddit = your_subreddit
 bot_subreddit = sub_where_users_report_problems
-snapshot_domains = np.reddit.com, np.redd.it, self.%(subreddit)s
 quote_wiki_page = wiki_page_with_quotes
 
 # Database configuration
-#   This assumes a heroku postgres database.
+#   This assumes and sqlite3 database.
 #
 #   record_TTL_days: number of days the bot will keep track of submissions
 #                    it's processed (used in maintenance)
