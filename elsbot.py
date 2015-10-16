@@ -16,7 +16,7 @@ from html.parser import HTMLParser
 import random
 from archives import ArchiveContainer
 
-VERSION = 'v3.0'
+VERSION = 'v3.0.1'
 DATABASE_FILE = os.environ['OPENSHIFT_DATA_DIR'] + 'sql.db'
 REDDIT_PATTERN = re.compile(r'https?://(([a-z]{2})(-[a-z]{2})?|beta|i|m|pay|ssl|www)\.?reddit\.com', flags=re.I)
 
@@ -262,7 +262,7 @@ def main():
     logging.info("ELSbot starting...")
 
     parser = argparse.ArgumentParser(description="Snap Shot Bot with Quotes.")
-    parser.add_argument('--run-once', '-r', action='store_false', help='run scan once then quit')
+    parser.add_argument('--run-once', '-r', action='store_true', help='run scan once then quit')
     parser.add_argument('--config-file', '-f', default='elsbot.cfg', help="specify a configuration file.")
     args = parser.parse_args()
 
