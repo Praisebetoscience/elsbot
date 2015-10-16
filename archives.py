@@ -2,11 +2,13 @@ __author__ = '/u/Praisebetoscience'
 
 import time
 import requests
+from requests.exceptions import ConnectionError, ConnectTimeout, HTTPError
 from urllib.parse import urlencode
 import re
 
 LEN_MAX = 35
 ARCHIVE_ORG_FORMAT = "%Y%m%d%H%M%S"
+RECOVERABLE_EXC = (ConnectionError, ConnectTimeout, HTTPError)
 
 
 def ratelimit(max_per_second):
@@ -37,7 +39,10 @@ class ArchiveIsArchive(object):
     @ratelimit(0.5)
     def archive(url):
         params = {'url': url}
-        res = requests.post('https://archive.is/submit/', params)
+        try:
+            res = requests.post('https://archive.is/submit/', params)
+        except RECOVERABLE_EXC:
+            return False
         if res.status_code != 200:
             return False
         url_re = re.search(r'^.*(?:archiveurl.{0,10}|replace\(")(?P<url>https?://archive\.is/[0-z]{1,6}).*$',

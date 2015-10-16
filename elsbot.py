@@ -16,7 +16,7 @@ from html.parser import HTMLParser
 import random
 from archives import ArchiveContainer
 
-VERSION = 'v3.0.1'
+VERSION = 'v3.0.2'
 DATABASE_FILE = os.environ['OPENSHIFT_DATA_DIR'] + 'sql.db'
 REDDIT_PATTERN = re.compile(r'https?://(([a-z]{2})(-[a-z]{2})?|beta|i|m|pay|ssl|www)\.?reddit\.com', flags=re.I)
 
