@@ -20,10 +20,7 @@ Login is now handled by OAuth.  [You can use this tutorial to get setup OAuth](h
 
 ## Database
 
-Database information is also set via Openshift environment variables: OPENSHIFT_POSTGRESQL_DB_URL and OPENSHIFT_APP_NAME.  To access the database locally you'll need to get ssh into your openshift account and run `echo ${OPENSHIFT_POSTGRESQL_DB_URL} ${OPENSHIFT_APP_NAME}` at the CLI.  You need to setup port forwarding with rhc: `rhc port-forward -a <YourAppname>`
-The OpenShift database has no row limits unlike Heroku (previously used).  However, the database maintenance remains in place to for cleanliness. 
-
-This bot was originally written for sqlite3, however there were [significant issues with using sqlite3 on Heroku](https://devcenter.heroku.com/articles/sqlite3) because of the filesystem it uses.  Now that the bot has moved over to OpenShift, the bot still uses PostgreSQL even though sqlite3 can be stored on OpenShift in OPENSHIFT_DATA_DIR simply beacuse it was eaier to migrate then change the PostArchive class again. 
+The database is back to using sqlite3, as Openshift provides the proper filesystems support.  If run locally, the location of the database file is set via the evironment variable OPENSHIFT_DATA_DIR. 
 
 # CLI
 
