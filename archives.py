@@ -61,7 +61,10 @@ class ArchiveOrgArchive(object):
     @staticmethod
     @ratelimit(0.5)
     def archive(url):
-        res = requests.get('https://web.archive.org/save/' + url)
+        try:
+            res = requests.get('https://web.archive.org/save/' + url)
+        except RECOVERABLE_EXC:
+            return False
         if res.status_code == 200:
             date = time.strftime(ARCHIVE_ORG_FORMAT)
             return 'https://web.archive.org/' + date + '/' + url
@@ -80,7 +83,10 @@ class MegalodonJPArchive(object):
     @ratelimit(0.5)
     def archive(url):
         params = {'url': url}
-        res = requests.post("http://megalodon.jp/pc/get_simple/decide", params)
+        try:
+            res = requests.post("http://megalodon.jp/pc/get_simple/decide", params)
+        except RECOVERABLE_EXC:
+            return False
         if res.url == 'http://megalodon.jp/pc/get_simple/decide':
             return False
         return res.url
