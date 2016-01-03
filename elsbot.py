@@ -85,9 +85,6 @@ class ELSBot(object):
         self.config['quote_wiki_page'] = cfg_file['reddit']['quote_wiki_page']
         self.config['defeat_css'] = [x.strip().lower() for x in cfg_file['reddit']['defeat_css'].split(',')]
 
-        print(self._fix_url("https://np.reddit.com/r/Shitstatistssay/"))
-        exit()
-
         # read in database config
         self.config['record_TTL_days'] = int(cfg_file['database']['record_TTL_days'])
         self.config['db_TTM'] = int(cfg_file['database']['time_to_maintenance'])
