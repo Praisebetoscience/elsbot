@@ -83,6 +83,10 @@ class ELSBot(object):
         self.config['subreddit'] = cfg_file['reddit']['subreddit']
         self.config['bot_subreddit'] = cfg_file['reddit']['bot_subreddit']
         self.config['quote_wiki_page'] = cfg_file['reddit']['quote_wiki_page']
+        self.config['defeat_css'] = [x.strip().lower() for x in cfg_file['reddit']['defeat_css'].split(',')]
+
+        print(self._fix_url("https://np.reddit.com/r/Shitstatistssay/"))
+        exit()
 
         # read in database config
         self.config['record_TTL_days'] = int(cfg_file['database']['record_TTL_days'])
@@ -148,13 +152,22 @@ class ELSBot(object):
             return random.choice(self.quote_list)
         return ''
 
-    @staticmethod
-    def _fix_url(url):
+    def _fix_url(self, url):
+        url = url.strip().lower()
+        print(url)
         if url.startswith(('/r/', '/u/')):
             url = "http://www.reddit.com" + url
         if url.startswith(('r/', 'u/')):
             url = "http://www.reddit.com/" + url
-        return re.sub(REDDIT_PATTERN, 'http://www.reddit.com', url)
+        url = re.sub(REDDIT_PATTERN, 'http://www.reddit.com', url)
+
+        #le reddit CSS killer
+        for sub in self.config['defeat_css']:
+            if url.endswith((sub, sub + '/')):
+                url = url + ".compact"
+            elif sub in url:
+                url = url.replace(sub, '')
+        return url
 
     @staticmethod
     def _build(archives, quote, subreddit):

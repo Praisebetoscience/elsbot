@@ -18,6 +18,7 @@ refresh_token = OAuth_token
 subreddit = your_subreddit
 bot_subreddit = sub_where_users_report_problems
 quote_wiki_page = wiki_page_with_quotes
+defeat_css = /r/annoying_css
 
 # Database configuration
 #   This assumes and sqlite3 database.
