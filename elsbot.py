@@ -82,7 +82,8 @@ class ELSBot(object):
         self.config['refresh_token'] = cfg_file['reddit']['refresh_token']
         self.config['subreddit'] = cfg_file['reddit']['subreddit']
         self.config['bot_subreddit'] = cfg_file['reddit']['bot_subreddit']
-        self.config['quote_wiki_page'] = cfg_file['reddit']['quote_wiki_page']
+        self.config['quote_wiki_page'] = cfg_file['reddit']['quote_wiki_page'] \
+            if cfg_file['reddit']['quote_wiki_page'] else None
         self.config['defeat_css'] = [x.strip().lower() for x in cfg_file['reddit']['defeat_css'].split(',')]
 
         # read in database config
@@ -214,6 +215,7 @@ class ELSBot(object):
             logging.error(str(e))
 
     def load_quote_list(self):
+        if self.config['quote_wiki_page'] is None: return False
         logging.debug("Checking quote wiki pate for updates...")
 
         try:
